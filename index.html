@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Desmistificando a Inteligência Artificial</title>
+<style>
+  :root {
+    --bg: #070b14;
+    --panel: #0f1728;
+    --card: #152139;
+    --text: #f2f6ff;
+    --muted: #a9b8d6;
+    --accent: #22d3ee;
+    --accent2: #a78bfa;
+    --blue: #38bdf8;
+    --red: #fb7185;
+    --radius: 18px;
+    --controls-h: clamp(56px, 8vh, 72px);   /* altura da barra de controles */
+    --content-max: 1200px;                  /* largura máxima do conteúdo (1080p) */
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; height: 100dvh; background: var(--bg); color: var(--text);
+    font-family: "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif; overflow: hidden; }
+
+  .deck { position: relative; width: 100%; height: 100%; height: 100dvh; }
+  .slide {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    justify-content: flex-start;
+    padding: clamp(1.25rem, 4vh, 3rem) clamp(1.25rem, 5vw, 5rem) calc(var(--controls-h) + clamp(1rem, 3vh, 2.5rem));
+    overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
+    opacity: 0; visibility: hidden; transform: translateY(24px) scale(.98);
+    transition: opacity .6s ease, transform .6s ease, visibility .6s;
+    background: radial-gradient(circle at 80% 0%, #132447 0%, var(--bg) 60%);
+  }
+  .slide.active { opacity: 1; visibility: visible; transform: none; }
+  .slide.leaving { transform: translateY(-24px) scale(.98); }
+
+  h1 { font-size: clamp(2.2rem, 4.5vw, 4.5rem); line-height: 1.05; font-weight: 800;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text; background-clip: text; color: transparent; }
+  h2 { font-size: clamp(1.75rem, 3vw, 2.9rem); line-height: 1.15; margin-bottom: clamp(.8rem, 2vh, 1.2rem); color: var(--accent); }
+  p, li { font-size: clamp(1.05rem, 1.4vw, 1.5rem); line-height: 1.5; color: var(--text); }
+  .sub { font-size: clamp(1.1rem, 1.7vw, 1.6rem); color: var(--muted); margin-top: clamp(.8rem, 2vh, 1.2rem); }
+  .hint { font-size: clamp(.95rem, 1vw, 1.05rem); color: var(--muted); margin-top: 1rem; }
+  .note { font-size: clamp(.95rem, 1vw, 1.05rem); color: var(--muted); margin-top: clamp(.9rem, 2vh, 1.4rem); font-style: italic; }
+  .analogy { margin-top: clamp(.9rem, 2vh, 1.4rem); padding: 14px 20px; border-left: 4px solid var(--accent2);
+    background: var(--panel); border-radius: 10px; font-size: clamp(1rem, 1.3vw, 1.25rem); }
+
+  canvas { display: block; width: 100%; background: transparent; }
+  .fill { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; }
+  .content { position: relative; z-index: 1; width: 100%; max-width: var(--content-max);
+    margin: auto auto; }
+
+  /* Slide 2 - camadas */
+  .layers { display: flex; flex-direction: column; gap: clamp(8px, 1.4vh, 14px); margin-top: clamp(.8rem, 2vh, 1.5rem); max-width: 900px; }
+  .layer { padding: clamp(10px, 1.6vh, 18px) clamp(14px, 1.6vw, 26px); border-radius: var(--radius); background: var(--card);
+    border: 1px solid #22345a; transition: transform .3s, box-shadow .3s; cursor: default; }
+  .layer:hover { transform: translateX(12px); box-shadow: 0 0 24px rgba(34,211,238,.25); }
+  .layer strong { font-size: clamp(1.1rem, 1.6vw, 1.5rem); color: var(--text); }
+  .layer span { display: block; font-size: clamp(.95rem, 1.2vw, 1.1rem); color: var(--muted); margin-top: 4px; }
+  .layer.l1 { margin-left: 0; border-color: #3b4f7e; }
+  .layer.l2 { margin-left: clamp(0px, 2.5vw, 40px); border-color: #2e6e92; }
+  .layer.l3 { margin-left: clamp(0px, 5vw, 80px); border-color: #5b48a8; }
+  .layer.l4 { margin-left: clamp(0px, 7.5vw, 120px); border-color: var(--accent); }
+
+  /* Slide 3 - linha do tempo */
+  .timeline { display: flex; flex-wrap: wrap; gap: clamp(8px, 1vw, 14px); margin-top: clamp(.8rem, 2vh, 1.2rem); }
+  .milestone { flex: 1 1 170px; min-width: 0; padding: clamp(10px, 1.4vh, 18px); border-radius: var(--radius);
+    background: var(--card); border: 2px solid #22345a; color: var(--text); cursor: pointer;
+    font-size: clamp(.9rem, 1.1vw, 1.05rem); text-align: left; transition: all .3s; font-family: inherit; overflow-wrap: anywhere; }
+  .milestone:hover, .milestone.on { border-color: var(--accent); transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(34,211,238,.25); }
+  .milestone b { display: block; font-size: clamp(1.3rem, 1.8vw, 1.7rem); color: var(--accent); }
+  .detail { margin-top: clamp(.9rem, 2.2vh, 1.6rem); min-height: clamp(90px, 14vh, 130px);
+    font-size: clamp(1.05rem, 1.4vw, 1.35rem);
+    padding: clamp(12px, 2vh, 20px) clamp(14px, 1.8vw, 24px); background: var(--panel); border-radius: var(--radius); transition: opacity .3s; }
+
+  /* Slide 4 */
+  .split { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+    gap: clamp(1.5rem, 3vw, 3rem); align-items: center; }
+  .split > * { min-width: 0; }
+  #nnCanvas, #mlCanvas { width: 100%; height: clamp(260px, 52vh, 520px); min-height: 260px; max-height: 520px;
+    border-radius: var(--radius); background: var(--panel); border: 1px solid #22345a; }
+  .btn { margin-top: 1rem; padding: 12px 22px; border-radius: 12px; border: 0; cursor: pointer;
+    background: linear-gradient(90deg, var(--accent), var(--accent2)); color: #06101f;
+    font-weight: 700; font-size: clamp(.95rem, 1.1vw, 1.1rem); font-family: inherit; }
+  .btn:hover { filter: brightness(1.1); }
+  .legend { font-size: clamp(.85rem, .95vw, 1rem); color: var(--muted); margin-top: .6rem; }
+
+  /* Slide 5 */
+  table { width: 100%; table-layout: fixed; border-collapse: collapse; margin-top: 1rem;
+    font-size: clamp(.9rem, 1.1vw, 1.1rem); }
+  th, td { padding: clamp(8px, 1vh, 12px) clamp(8px, 1vw, 14px); border-bottom: 1px solid #22345a;
+    text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+  th { color: var(--accent); }
+  td:first-child { color: var(--muted); width: 26%; }
+
+  /* Slide 6 - cards */
+  .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(10px, 1.2vw, 16px); margin-top: 1rem; }
+  .card { perspective: 1000px; height: clamp(130px, 18vh, 170px); cursor: pointer; min-width: 0; }
+  .card-inner { position: relative; width: 100%; height: 100%; transition: transform .6s; transform-style: preserve-3d; }
+  .card.flip .card-inner { transform: rotateY(180deg); }
+  .face { position: absolute; inset: 0; backface-visibility: hidden; border-radius: var(--radius);
+    padding: clamp(10px, 1.6vh, 18px) clamp(12px, 1.6vw, 22px); display: flex; flex-direction: column; justify-content: center; overflow: auto; }
+  .front { background: var(--card); border: 1px solid #2e4a7a; }
+  .front strong { font-size: clamp(1rem, 1.4vw, 1.35rem); }
+  .front span { color: var(--muted); font-size: clamp(.85rem, 1vw, 1rem); margin-top: 6px; }
+  .back { background: #1d2f52; transform: rotateY(180deg); border: 1px solid var(--accent);
+    font-size: clamp(.9rem, 1.1vw, 1.05rem); line-height: 1.45; }
+
+  /* Slide 7 */
+  .sources { margin-top: clamp(1rem, 3vh, 2rem); font-size: clamp(.85rem, 1vw, 1rem); color: var(--muted); line-height: 1.8; overflow-wrap: anywhere; }
+  .sources a { color: var(--accent); text-decoration: none; }
+  .sources a:hover { text-decoration: underline; }
+
+  /* Controles */
+  .controls { position: fixed; bottom: 0; left: 0; right: 0; height: var(--controls-h);
+    display: flex; align-items: center; justify-content: center; gap: clamp(10px, 1.4vw, 18px);
+    padding: 0 clamp(10px, 2vw, 24px); background: rgba(7,11,20,.85);
+    backdrop-filter: blur(6px); z-index: 10; }
+  .controls button { padding: clamp(8px, 1vh, 10px) clamp(14px, 1.5vw, 20px); border-radius: 10px; border: 1px solid #2e4a7a; background: var(--panel);
+    color: var(--text); font-size: clamp(.9rem, 1.1vw, 1rem); cursor: pointer; font-family: inherit; white-space: nowrap; }
+  .controls button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+  .controls button:disabled { opacity: .35; cursor: not-allowed; }
+  .counter { font-size: clamp(.9rem, 1.1vw, 1.05rem); color: var(--muted); min-width: 120px; text-align: center; white-space: nowrap; }
+  .progress { position: fixed; top: 0; left: 0; height: 4px; background: linear-gradient(90deg,var(--accent),var(--accent2));
+    transition: width .5s ease; z-index: 11; }
+
+  /* Tablets e celulares: 1 coluna */
+  @media (max-width: 1024px) {
+    .split { grid-template-columns: minmax(0, 1fr); gap: clamp(1rem, 3vh, 1.5rem); }
+    .grid { grid-template-columns: minmax(0, 1fr); }
+    .card { height: clamp(120px, 20vh, 170px); }
+  }
+
+  /* Celulares */
+  @media (max-width: 600px) {
+    .slide { padding-left: 1rem; padding-right: 1rem; }
+    .layer.l2 { margin-left: 12px; }
+    .layer.l3 { margin-left: 24px; }
+    .layer.l4 { margin-left: 36px; }
+    #nnCanvas, #mlCanvas { height: 300px; min-height: 260px; }
+    table { font-size: .85rem; }
+    th, td { padding: 8px 6px; }
+    .controls { height: auto; min-height: var(--controls-h); flex-wrap: wrap; gap: 8px 10px; padding: 8px 10px; }
+    .controls button { padding: 8px 12px; font-size: .9rem; }
+    .counter { order: -1; width: 100%; min-width: 0; font-size: .95rem; }
+    .slide { padding-bottom: 150px; }
+  }
+
+  /* Monitores grandes e ultrawide: conteúdo continua contido e centralizado */
+  @media (min-width: 2200px) {
+    :root { --content-max: 1400px; }
+  }
+
+  /* Celular na horizontal / janelas baixas */
+  @media (max-height: 560px) and (orientation: landscape) {
+    .slide { padding-top: 1rem; padding-bottom: calc(var(--controls-h) + .75rem); }
+    h1 { font-size: 2.2rem; }
+    h2 { font-size: 1.5rem; margin-bottom: .5rem; }
+    p, li { font-size: 1rem; }
+    .layers { margin-top: .5rem; gap: 6px; }
+    .layer { padding: 6px 12px; }
+    .layer strong { font-size: 1rem; }
+    .layer span { font-size: .85rem; }
+    .card { height: 120px; }
+    #nnCanvas, #mlCanvas { height: 60vh; min-height: 200px; }
+    .controls { height: 52px; min-height: 52px; }
+  }
+</style>
+</head>
+<body>
+<div class="progress" id="progress"></div>
+
+<main class="deck" id="deck">
+
+  <!-- Slide 1 -->
+  <section class="slide active">
+    <canvas class="fill" id="particles"></canvas>
+    <div class="content">
+      <h1>Desmistificando a<br>Inteligência Artificial</h1>
+      <p class="sub">O que é, como funciona e como impacta o nosso dia a dia</p>
+      <p class="hint">Use as setas ← → do teclado ou os botões embaixo para navegar. Tecla F alterna tela cheia.</p>
+    </div>
+  </section>
+
+  <!-- Slide 2 -->
+  <section class="slide">
+    <div class="content">
+      <h2>O que é Inteligência Artificial?</h2>
+      <p>É a capacidade de computadores e máquinas simularem o <b>aprendizado</b>, a <b>solução de problemas</b> e o <b>raciocínio</b> humano.</p>
+      <div class="layers">
+        <div class="layer l1"><strong>Inteligência Artificial</strong><span>A área ampla: qualquer técnica que faz máquinas agirem de forma "inteligente".</span></div>
+        <div class="layer l2"><strong>Machine Learning</strong><span>Dentro da IA: sistemas que aprendem padrões a partir de dados, sem regras escritas à mão.</span></div>
+        <div class="layer l3"><strong>Deep Learning</strong><span>Dentro do ML: redes neurais com muitas camadas, boas com imagens, sons e textos.</span></div>
+        <div class="layer l4"><strong>IA Generativa</strong><span>Modelos que criam conteúdo novo: textos, imagens, áudio e código.</span></div>
+      </div>
+      <p class="note">Pense como bonecas russas: cada camada cabe dentro da anterior.</p>
+    </div>
+  </section>
+
+  <!-- Slide 3 -->
+  <section class="slide">
+    <div class="content">
+      <h2>Breve Linha do Tempo da IA</h2>
+      <p>Clique em um marco para ver o que aconteceu.</p>
+      <div class="timeline" id="timeline">
+        <button class="milestone on" data-i="0"><b>1950</b>O Teste de Turing</button>
+        <button class="milestone" data-i="1"><b>1956</b>Conferência de Dartmouth</button>
+        <button class="milestone" data-i="2"><b>1997</b>Deep Blue vence no xadrez</button>
+        <button class="milestone" data-i="3"><b>2012</b>AlexNet e o Deep Learning</button>
+        <button class="milestone" data-i="4"><b>2022+</b>Era da IA Generativa</button>
+      </div>
+      <div class="detail" id="detail"></div>
+    </div>
+  </section>
+
+  <!-- Slide 4 -->
+  <section class="slide">
+    <div class="content split">
+      <div>
+        <h2>Como funciona uma Rede Neural?</h2>
+        <p>Imagine uma fábrica de decisões: a informação entra, passa por etapas e sai uma resposta.</p>
+        <p class="sub" style="font-size:1.3rem">Exemplo: a imagem é de um <b>Gato</b> ou de um <b>Cão</b>?</p>
+        <p class="legend">Os pulsos mostram a informação viajando. Cada ligação tem um "peso" que a rede ajusta ao aprender.</p>
+      </div>
+      <div>
+        <canvas id="nnCanvas" aria-label="Animação de rede neural"></canvas>
+        <p class="legend">Entrada (pixels) → Camadas ocultas (padrões) → Saída (Gato / Cão)</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Slide 5 -->
+  <section class="slide">
+    <div class="content split">
+      <div>
+        <h2>Como a IA aprende?</h2>
+        <p>Os pontos azuis e vermelhos são exemplos. O objetivo é encontrar a <b>fronteira</b> que separa os grupos.</p>
+        <button class="btn" id="trainBtn">Simular Treinamento</button>
+        <p class="legend">Clique para ver a linha de decisão se ajustar aos dados.</p>
+        <table>
+          <tr><th></th><th>Programação Tradicional</th><th>Machine Learning</th></tr>
+          <tr><td>Entrada</td><td>Regras + Dados</td><td>Dados + Respostas</td></tr>
+          <tr><td>Saída</td><td>Respostas</td><td>Regras (o modelo)</td></tr>
+        </table>
+      </div>
+      <div>
+        <canvas id="mlCanvas" aria-label="Simulação de machine learning"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <!-- Slide 6 -->
+  <section class="slide">
+    <div class="content">
+      <h2>Para que serve? Casos de uso no dia a dia</h2>
+      <p>Clique nos cartões para descobrir como a IA atua por trás dos panos.</p>
+      <div class="grid">
+        <div class="card" data-flip>
+          <div class="card-inner">
+            <div class="face front"><strong>Processamento de Linguagem Natural</strong><span>Assistentes virtuais e chatbots</span></div>
+            <div class="face back">Entende o significado das frases, não só as palavras. Analogia: como um atendente que lê a intenção por trás do seu pedido.</div>
+          </div>
+        </div>
+        <div class="card" data-flip>
+          <div class="card-inner">
+            <div class="face front"><strong>Visão Computacional</strong><span>Reconhecimento facial e diagnósticos médicos</span></div>
+            <div class="face back">Reconhece padrões em pixels. Analogia: como uma pessoa que aprendeu a reconhecer um rosto olhando milhares de fotos.</div>
+          </div>
+        </div>
+        <div class="card" data-flip>
+          <div class="card-inner">
+            <div class="face front"><strong>Sistemas de Recomendação</strong><span>Streaming e e-commerce</span></div>
+            <div class="face back">Compara o seu histórico com o de pessoas parecidas. Analogia: o amigo que sempre sabe qual filme você vai gostar.</div>
+          </div>
+        </div>
+        <div class="card" data-flip>
+          <div class="card-inner">
+            <div class="face front"><strong>Automação e Predição</strong><span>Manutenção preditiva e carros autônomos</span></div>
+            <div class="face back">Prevê falhas ou situações futuras a partir de dados. Analogia: o mecânico que percebe o barulho antes de o carro quebrar.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Slide 7 -->
+  <section class="slide">
+    <div class="content">
+      <h2>Conclusão e o Futuro da IA</h2>
+      <ul style="list-style:none; display:grid; gap:10px;">
+        <li>✔ IA é o campo amplo; Machine Learning aprende com dados; Deep Learning usa redes profundas; IA Generativa cria conteúdo.</li>
+        <li>✔ A IA aprende padrões a partir de exemplos, não de regras escritas à mão.</li>
+        <li>✔ Ela já está presente no nosso cotidiano, muitas vezes sem percebermos.</li>
+      </ul>
+      <div class="analogy">Uso ético: a IA é uma ferramenta poderosa. Decisões importantes exigem supervisão humana, transparência e responsabilidade. O melhor resultado vem de <b>humanos + IA trabalhando juntos</b>.</div>
+      <div class="sources">
+        Referências para consulta:<br>
+        IBM Think: <a href="https://www.ibm.com/br-pt/think/topics/artificial-intelligence" target="_blank" rel="noopener">ibm.com/br-pt/think/topics/artificial-intelligence</a><br>
+        AWS: <a href="https://aws.amazon.com/pt/what-is/artificial-intelligence/" target="_blank" rel="noopener">aws.amazon.com/pt/what-is/artificial-intelligence</a><br>
+        Google Cloud: <a href="https://cloud.google.com/learn/what-is-artificial-intelligence?hl=pt-BR" target="_blank" rel="noopener">cloud.google.com/learn/what-is-artificial-intelligence</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<nav class="controls">
+  <button id="prevBtn" title="Slide anterior (←)">← Anterior</button>
+  <span class="counter" id="counter">Slide 1 de 7</span>
+  <button id="nextBtn" title="Próximo slide (→ ou Espaço)">Próximo →</button>
+  <button id="fsBtn" title="Alternar tela cheia (F)">⛶ Tela cheia</button>
+</nav>
+
+<script>
+(() => {
+  const slides = [...document.querySelectorAll('.slide')];
+  const total = slides.length;
+  let current = 0;
+  const counter = document.getElementById('counter');
+  const prevBtn = document.getElementById('prevBtn');
+  const nextBtn = document.getElementById('nextBtn');
+  const progress = document.getElementById('progress');
+
+  function show(i) {
+    if (i < 0 || i >= total) return;
+    slides[current].classList.remove('active');
+    slides[current].classList.add('leaving');
+    const prev = current;
+    current = i;
+    setTimeout(() => slides[prev].classList.remove('leaving'), 600);
+    slides[current].classList.add('active');
+    counter.textContent = `Slide ${current + 1} de ${total}`;
+    prevBtn.disabled = current === 0;
+    nextBtn.disabled = current === total - 1;
+    progress.style.width = ((current + 1) / total * 100) + '%';
+    onSlideEnter(current);
+  }
+  const next = () => show(current + 1);
+  const prev = () => show(current - 1);
+
+  prevBtn.onclick = prev;
+  nextBtn.onclick = next;
+
+  // Teclado: setas, espaço e F
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === 'PageDown') { e.preventDefault(); next(); }
+    else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); prev(); }
+    else if (e.key === ' ') { e.preventDefault(); e.shiftKey ? prev() : next(); }
+    else if (e.key === 'Home') show(0);
+    else if (e.key === 'End') show(total - 1);
+    else if (e.key.toLowerCase() === 'f') toggleFs();
+  });
+
+  // Tela cheia
+  const fsBtn = document.getElementById('fsBtn');
+  function toggleFs() {
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+    else document.exitFullscreen?.();
+  }
+  fsBtn.onclick = toggleFs;
+  document.addEventListener('fullscreenchange', () => {
+    fsBtn.textContent = document.fullscreenElement ? '⛶ Sair da tela cheia' : '⛶ Tela cheia';
+    setTimeout(() => onSlideEnter(current), 300);
+  });
+
+  // ---------- Utilidades de canvas ----------
+  function fitCanvas(c) {
+    const dpr = window.devicePixelRatio || 1;
+    const r = c.getBoundingClientRect();
+    c.width = r.width * dpr; c.height = r.height * dpr;
+    const ctx = c.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return { ctx, w: r.width, h: r.height };
+  }
+
+  // ---------- Slide 1: partículas conectadas ----------
+  const pc = document.getElementById('particles');
+  let pts = [];
+  let pAnim = null;
+  function initParticles() {
+    const { w, h } = fitCanvas(pc);
+    pts = Array.from({ length: 70 }, () => ({
+      x: Math.random() * w, y: Math.random() * h,
+      vx: (Math.random() - .5) * .4, vy: (Math.random() - .5) * .4
+    }));
+  }
+  function drawParticles() {
+    const { ctx, w, h } = fitCanvas(pc);
+    ctx.clearRect(0, 0, w, h);
+    for (const p of pts) {
+      p.x += p.vx; p.y += p.vy;
+      if (p.x < 0 || p.x > w) p.vx *= -1;
+      if (p.y < 0 || p.y > h) p.vy *= -1;
+    }
+    for (let i = 0; i < pts.length; i++) {
+      for (let j = i + 1; j < pts.length; j++) {
+        const dx = pts[i].x - pts[j].x, dy = pts[i].y - pts[j].y;
+        const d = Math.hypot(dx, dy);
+        if (d < 120) {
+          ctx.strokeStyle = `rgba(34,211,238,${(1 - d / 120) * .35})`;
+          ctx.beginPath(); ctx.moveTo(pts[i].x, pts[i].y); ctx.lineTo(pts[j].x, pts[j].y); ctx.stroke();
+        }
+      }
+    }
+    ctx.fillStyle = '#a78bfa';
+    for (const p of pts) { ctx.beginPath(); ctx.arc(p.x, p.y, 2.2, 0, Math.PI * 2); ctx.fill(); }
+    pAnim = requestAnimationFrame(drawParticles);
+  }
+
+  // ---------- Slide 3: linha do tempo ----------
+  const milestones = [
+    'Em 1950, Alan Turing propôs o "Jogo da Imitação", hoje conhecido como Teste de Turing: se uma máquina conversa de forma indistinguível de um humano, ela pode ser considerada inteligente.',
+    'Em 1956, pesquisadores reunidos em Dartmouth (EUA) criaram o termo "Inteligência Artificial", dando início oficial ao campo de pesquisa.',
+    'Em 1997, o computador Deep Blue, da IBM, venceu o campeão mundial de xadrez Garry Kasparov. Foi a era dos sistemas especialistas, baseados em regras criadas por humanos.',
+    'Em 2012, a rede AlexNet venceu com folga uma competição de reconhecimento de imagens, marcando a revolução do Deep Learning, impulsionada por dados e poder de processamento.',
+    'A partir de 2022, modelos de linguagem de grande porte (LLMs) passaram a criar textos, imagens e códigos, levando a IA Generativa ao público geral.'
+  ];
+  const tlButtons = document.querySelectorAll('.milestone');
+  const detail = document.getElementById('detail');
+  function selectMilestone(i) {
+    tlButtons.forEach(b => b.classList.toggle('on', +b.dataset.i === i));
+    detail.style.opacity = 0;
+    setTimeout(() => { detail.textContent = milestones[i]; detail.style.opacity = 1; }, 200);
+  }
+  tlButtons.forEach(b => b.addEventListener('click', () => selectMilestone(+b.dataset.i)));
+
+  // ---------- Slide 4: rede neural animada ----------
+  const nn = document.getElementById('nnCanvas');
+  let nnAnim = null, nnState = null;
+  function buildNet(w, h) {
+    const layers = [3, 5, 4, 2];
+    const xs = layers.map((_, i) => w * (.12 + i * .76 / (layers.length - 1)));
+    const nodes = layers.map((n, li) =>
+      Array.from({ length: n }, (_, ni) => ({ x: xs[li], y: h * (.15 + (ni + .5) * .7 / n) }))
+    );
+    const edges = [];
+    for (let l = 0; l < nodes.length - 1; l++)
+      for (const a of nodes[l]) for (const b of nodes[l + 1])
+        edges.push({ a, b, w: Math.random() * 2 - 1 });
+    return { nodes, edges, pulses: [], tick: 0, labels: ['Pixels', 'Padrões', 'Padrões', 'Saída'] };
+  }
+  function drawNN() {
+    const { ctx, w, h } = fitCanvas(nn);
+    if (!nnState) nnState = buildNet(w, h);
+    ctx.clearRect(0, 0, w, h);
+    // ligações com peso
+    for (const e of nnState.edges) {
+      ctx.strokeStyle = e.w > 0 ? 'rgba(56,189,248,.25)' : 'rgba(251,113,133,.25)';
+      ctx.lineWidth = 1 + Math.abs(e.w) * 1.5;
+      ctx.beginPath(); ctx.moveTo(e.a.x, e.a.y); ctx.lineTo(e.b.x, e.b.y); ctx.stroke();
+    }
+    ctx.lineWidth = 1;
+    // pulsos (sinapses) viajando
+    nnState.tick++;
+    if (nnState.tick % 14 === 0) {
+      const e = nnState.edges[Math.floor(Math.random() * nnState.edges.length)];
+      nnState.pulses.push({ e, t: 0 });
+    }
+    nnState.pulses = nnState.pulses.filter(p => p.t <= 1);
+    for (const p of nnState.pulses) {
+      p.t += .025;
+      const x = p.e.a.x + (p.e.b.x - p.e.a.x) * p.t;
+      const y = p.e.a.y + (p.e.b.y - p.e.a.y) * p.t;
+      ctx.fillStyle = '#facc15';
+      ctx.shadowColor = '#facc15'; ctx.shadowBlur = 12;
+      ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+    // nós (neurônios) acendem quando recebem pulso
+    nnState.nodes.forEach((layer, li) => layer.forEach((n, ni) => {
+      const active = nnState.pulses.some(p => p.t > .9 && (p.e.b === n));
+      ctx.fillStyle = active ? '#facc15' : '#1e3a5f';
+      ctx.strokeStyle = '#22d3ee'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(n.x, n.y, 13, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    }));
+    // rótulos das camadas
+    ctx.fillStyle = '#a9b8d6'; ctx.font = `${Math.max(12, w * .03)}px system-ui`; ctx.textAlign = 'center';
+    nnState.nodes.forEach((layer, li) => ctx.fillText(nnState.labels[li], layer[0].x, h * .05));
+    ctx.fillStyle = '#fb7185'; ctx.fillText('Gato', nnState.nodes[3][0].x + 0, nnState.nodes[3][0].y - 22);
+    ctx.fillStyle = '#38bdf8'; ctx.fillText('Cão', nnState.nodes[3][1].x, nnState.nodes[3][1].y + 32);
+    nnAnim = requestAnimationFrame(drawNN);
+  }
+
+  // ---------- Slide 5: machine learning ----------
+  const ml = document.getElementById('mlCanvas');
+  const trainBtn = document.getElementById('trainBtn');
+  let mlPoints = [], mlAngle = 0, mlOffset = 0, mlTarget = { a: 0, o: 0 }, mlAnimStart = 0, mlRunning = false;
+  let mlFrame = null;
+  function genPoints() {
+    mlPoints = [];
+    for (let i = 0; i < 26; i++) {
+      mlPoints.push({ x: Math.random() * .4, y: Math.random() * .45, c: 0 }); // azul (baixo-esquerda)
+      mlPoints.push({ x: .6 + Math.random() * .4, y: .55 + Math.random() * .45, c: 1 }); // vermelho (cima-direita)
+    }
+  }
+  function drawML() {
+    const { ctx, w, h } = fitCanvas(ml);
+    ctx.clearRect(0, 0, w, h);
+    // eixos
+    ctx.strokeStyle = '#22345a'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(30, h - 30); ctx.lineTo(w - 10, h - 30); ctx.moveTo(30, h - 30); ctx.lineTo(30, 10); ctx.stroke();
+    // linha de decisão: passa pelo centro com ângulo mlAngle e deslocamento mlOffset
+    const cx = w / 2, cy = h / 2;
+    const dx = Math.cos(mlAngle), dy = Math.sin(mlAngle);
+    const len = Math.max(w, h);
+    const ox = cx + mlOffset * w * .3 * -dy, oy = cy + mlOffset * h * .3 * dx;
+    ctx.strokeStyle = 'rgba(242,246,255,.85)'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(ox - dx * len, oy - dy * len); ctx.lineTo(ox + dx * len, oy + dy * len); ctx.stroke();
+    // pontos
+    for (const p of mlPoints) {
+      ctx.fillStyle = p.c === 0 ? '#38bdf8' : '#fb7185';
+      ctx.beginPath(); ctx.arc(30 + p.x * (w - 60), h - 30 - p.y * (h - 60), 7, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.fillStyle = '#a9b8d6'; ctx.font = '15px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('Azul = Grupo A', 40, 28); ctx.fillStyle = '#fb7185'; ctx.fillText('Vermelho = Grupo B', 40, 48);
+    mlFrame = requestAnimationFrame(drawML);
+  }
+  function startTraining() {
+    if (mlRunning) return;
+    mlRunning = true;
+    mlAngle = (Math.random() * 2 - 1) * Math.PI / 2; mlOffset = Math.random() * 1.2 - .6;
+    const from = { a: mlAngle, o: mlOffset };
+    mlTarget = { a: -Math.PI / 4, o: 0 };
+    const t0 = performance.now(), dur = 2600;
+    const ease = t => t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+    (function step(now) {
+      const t = Math.min(1, (now - t0) / dur);
+      mlAngle = from.a + (mlTarget.a - from.a) * ease(t);
+      mlOffset = from.o + (mlTarget.o - from.o) * ease(t);
+      if (t < 1) requestAnimationFrame(step); else mlRunning = false;
+    })(t0);
+  }
+  trainBtn.addEventListener('click', startTraining);
+
+  // ---------- Slide 6: cartões ----------
+  document.querySelectorAll('[data-flip]').forEach(c =>
+    c.addEventListener('click', () => c.classList.toggle('flip')));
+
+  // ---------- Gerenciamento de animações por slide ----------
+  function onSlideEnter(i) {
+    cancelAnimationFrame(pAnim); cancelAnimationFrame(nnAnim); cancelAnimationFrame(mlFrame);
+    if (i === 0) { initParticles(); drawParticles(); }
+    if (i === 3) { nnState = null; drawNN(); }
+    if (i === 4) { genPoints(); mlAngle = 0.2; mlOffset = .4; drawML(); }
+  }
+  window.addEventListener('resize', () => onSlideEnter(current));
+
+  selectMilestone(0);
+  show(0);
+})();
+</script>
+</body>
+</html>
